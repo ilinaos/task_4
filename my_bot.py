@@ -31,17 +31,13 @@ try:
 
 	cursor.execute("""CREATE TABLE IF NOT EXISTS "user_category" (
 	"id_user"	INTEGER NOT NULL,
-	"id_category"	INTEGER NOT NULL,
-	FOREIGN KEY("id_category") REFERENCES "categories"("id"),
-	FOREIGN KEY("id_user") REFERENCES "users"("id")
+	"id_category"	INTEGER NOT NULL
 	);""")
 	conn.commit()
 
 	cursor.execute('''CREATE TABLE IF NOT EXISTS "user_keywords" (
 	"id_user"	INTEGER NOT NULL,
-	"id_word"	INTEGER NOT NULL,
-	FOREIGN KEY("id_user") REFERENCES "users"("id"),
-	FOREIGN KEY("id_word") REFERENCES "keywords"("id")
+	"id_word"	INTEGER NOT NULL
 	);''')
 	conn.commit()
 	print ('база благополучно открыта')
@@ -93,18 +89,14 @@ def handle_view_category(message):
 		x=int(message.from_user.id)
 		info = cursor.execute("""SELECT categories.category
 								FROM categories
-								JOIN user_category ON categories.id=user_category.id_category
+								JOIN user_category ON categories.category=user_category.id_category
 								JOIN users ON users.id=user_category.id_user
 								WHERE users.id=?""", (x,)).fetchall()
 		if len(info) == 0:
 			bot.send_message(message.from_user.id, 'Вы пока ни на какие категории не подписаны')
 		else:
-			answer=''
-			for i in range(len(info)):
-				answer += f'{i}'
-				if i!=len(info):
-					answer+=', '
-			bot.send_message(message.from_user.id, f'Вы подписаны на следующие категории: {answer}')
+			bot.send_message(message.from_user.id, f'Вы подписаны на следующие категории: {info}')
+			print(info)
 	except sq.Error:
 		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу просмотреть подписки')
 	finally:
@@ -124,7 +116,7 @@ def handle_add_category(message):
 			#проверить на что подписан пользователь
 			info1 = cursor.execute("""SELECT categories.category
 										FROM categories
-										JOIN user_category ON categories.id=user_category.id_category
+										JOIN user_category ON categories.category=user_category.id_category
 										JOIN users ON users.id=user_category.id_user
 										WHERE users.id=?""", (x,)).fetchall()
 			print (info1)

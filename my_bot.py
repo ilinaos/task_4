@@ -8,16 +8,14 @@ try:
 	cursor = conn.cursor()
 
 	cursor.execute("""CREATE TABLE IF NOT EXISTS "categories" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"category"	TEXT,
-	PRIMARY KEY("id" AUTOINCREMENT)
+	"category"	TEXT NOT NULL UNIQUE,
+	PRIMARY KEY("category")
 );""")
 	conn.commit()
 
 	cursor.execute("""CREATE TABLE IF NOT EXISTS "keywords" (
-	"id"	INTEGER NOT NULL UNIQUE,
-	"word"	TEXT,
-	PRIMARY KEY("id" AUTOINCREMENT)
+	"word"	TEXT NOT NULL UNIQUE,
+	PRIMARY KEY("word")
 	);""")
 	conn.commit()
 
@@ -31,13 +29,13 @@ try:
 
 	cursor.execute("""CREATE TABLE IF NOT EXISTS "user_category" (
 	"id_user"	INTEGER NOT NULL,
-	"id_category"	INTEGER NOT NULL
+	"id_category"	TEXT NOT NULL
 	);""")
 	conn.commit()
 
 	cursor.execute('''CREATE TABLE IF NOT EXISTS "user_keywords" (
 	"id_user"	INTEGER NOT NULL,
-	"id_word"	INTEGER NOT NULL
+	"id_word"	TEXT NOT NULL
 	);''')
 	conn.commit()
 	print ('база благополучно открыта')
@@ -52,11 +50,11 @@ def handle_start_help(message):
 	bot.send_message(message.from_user.id, 'Привет! Я могу предложить новости. Доступные команды:\n'
 										   'регистрация - /register\n'
 										   'просмотр категорий - /view_cat\n'
-										   'добавить категорию - /add_cat\n'
-										   'удалить категорию - /delete_cat\n'
+										   'добавить категорию - /add_cat название\n'
+										   'удалить категорию - /delete_cat название\n'
 										   'просмотр ключевых слов - /view_key\n'
-										   'добавить ключевое слово - /add_key\n'
-										   'удалить ключевое слово - /delete_key\n'
+										   'добавить ключевое слово - /add_key название\n'
+										   'удалить ключевое слово - /delete_key название\n'
 										   'просмотреть последние новости - /news')
 
 @bot.message_handler(commands=['register'])
@@ -95,8 +93,10 @@ def handle_view_category(message):
 		if len(info) == 0:
 			bot.send_message(message.from_user.id, 'Вы пока ни на какие категории не подписаны')
 		else:
-			bot.send_message(message.from_user.id, f'Вы подписаны на следующие категории: {info}')
-			print(info)
+			answer=''
+			for i in info:
+				answer+=str(i)[2:-3]+', '
+			bot.send_message(message.from_user.id, f'Вы подписаны на следующие категории: {answer[:-2]}')
 	except sq.Error:
 		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу просмотреть подписки')
 	finally:
@@ -104,7 +104,7 @@ def handle_view_category(message):
 
 @bot.message_handler(commands=['add_cat'])
 def handle_add_category(message):
-	bot.send_message(message.from_user.id, 'Хотите добавить новую категорию? Не вопрос')
+	# bot.send_message(message.from_user.id, 'Хотите добавить новую категорию? Не вопрос')
 	try:
 		conn = sq.connect('db_bot.db')
 		cursor = conn.cursor()
@@ -113,38 +113,72 @@ def handle_add_category(message):
 			bot.send_message(message.from_user.id, 'Беда! Вы не указали категорию. Введите команду в формате /add_cat название_категории')
 		else:
 			cat = message.text.lower().split()[1]
+			# print(cat, len(cat))
 			#проверить на что подписан пользователь
 			info1 = cursor.execute("""SELECT categories.category
 										FROM categories
 										JOIN user_category ON categories.category=user_category.id_category
 										JOIN users ON users.id=user_category.id_user
 										WHERE users.id=?""", (x,)).fetchall()
-			print (info1)
+			inf1=[]
+			for i in info1:
+				inf1.append(str(i)[2:-3])
 			# и проверить, какие категории уже в базе есть
-			info2=cursor.execute("""SELECT categories.category
-										FROM categories
-										WHERE categories.category=?""", (cat,)).fetchall()
-			print (info2)
-			if cat in info1 and cat in info2:
+			info2 = cursor.execute("""SELECT category
+										FROM categories""").fetchall()
+			inf2=[]
+			for i in info2:
+				inf2.append(str(i)[2:-3])
+			if cat in inf1 and cat in inf2:
+				# print ('и там, и там')
 				bot.send_message(message.from_user.id, 'Вы уже подписаны на эту категорию')
-			elif cat in info2:
+			elif cat in inf2:
+				# print('в категориях, но не в подписках')
 				cursor.execute("""INSERT INTO user_category (id_user, id_category) VALUES (?, ?)""", (x,cat))
 				conn.commit()
 				bot.send_message(message.from_user.id, f'Ура! Подписка на категорию {cat} добавлена')
 			else:
+				# print('нигде нет')
 				cursor.execute("""INSERT INTO categories (category) VALUES (?)""", (cat,))
 				conn.commit()
 				cursor.execute("""INSERT INTO user_category (id_user, id_category) VALUES (?, ?)""", (x, cat))
 				conn.commit()
 				bot.send_message(message.from_user.id, f'Ура! Подписка на категорию {cat} добавлена')
 	except sq.Error:
-		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу просмотреть добавить категорию')
+		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу добавить категорию')
 	finally:
 		conn.close()
 
 @bot.message_handler(commands=['delete_cat'])
 def handle_delete_category(message):
-	bot.send_message(message.from_user.id, 'Зачем же удалять категорию?')
+	# bot.send_message(message.from_user.id, 'Зачем же удалять категорию?')
+	try:
+		conn = sq.connect('db_bot.db')
+		cursor = conn.cursor()
+		x=int(message.from_user.id)
+		if len(message.text.split()) <=1:
+			bot.send_message(message.from_user.id, 'Беда! Вы не указали категорию. Введите команду в формате /delete_cat название_категории')
+		else:
+			cat = message.text.lower().split()[1]
+			# проверить на что подписан пользователь
+			info1 = cursor.execute("""SELECT categories.category
+											FROM categories
+											JOIN user_category ON categories.category=user_category.id_category
+											JOIN users ON users.id=user_category.id_user
+											WHERE users.id=?""", (x,)).fetchall()
+			inf1 = []
+			for i in info1:
+				inf1.append(str(i)[2:-3])
+			if cat in inf1:
+				cursor.execute("""DELETE FROM user_category WHERE id_category=? AND id_user=?""",(cat,x))
+				conn.commit()
+				bot.send_message(message.from_user.id, 'Вы больше не подписаны на эту категорию')
+			else:
+				bot.send_message(message.from_user.id, 'Вы не подписаны на эту категорию')
+	except sq.Error:
+		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу удалить подписку на категорию')
+	finally:
+		conn.close()
 
 @bot.message_handler(commands=['view_key'])
 def handle_view_keywords(message):
@@ -154,18 +188,16 @@ def handle_view_keywords(message):
 		x = int(message.from_user.id)
 		info = cursor.execute("""SELECT keywords.word
 								FROM keywords
-								JOIN user_keywords ON keywords.id=user_keywords.id_word
+								JOIN user_keywords ON keywords.word=user_keywords.id_word
 								JOIN users ON users.id=user_keywords.id_user
 								WHERE users.id=?""", (x,)).fetchall()
 		if len(info) == 0:
-			bot.send_message(message.from_user.id, 'Для вас не указаны ключевые слова')
+			bot.send_message(message.from_user.id, 'У вас пока нет ключевых слов')
 		else:
 			answer = ''
-			for i in range(len(info)):
-				answer += f'{i}'
-				if i != len(info):
-					answer += ', '
-			bot.send_message(message.from_user.id, f'Вас интересуют следующие ключевые слова: {answer}')
+			for i in info:
+				answer += str(i)[2:-3] + ', '
+			bot.send_message(message.from_user.id, f'Вас интересуют следующие ключевые слова: {answer[:-2]}')
 	except sq.Error:
 		bot.send_message(message.from_user.id, 'Ошибка подключения к базе, не могу просмотреть ключевые слова')
 	finally:
@@ -173,11 +205,77 @@ def handle_view_keywords(message):
 
 @bot.message_handler(commands=['add_key'])
 def handle_add_keyword(message):
-	bot.send_message(message.from_user.id, 'Добавляем новые ключевые слова')
+	# bot.send_message(message.from_user.id, 'Добавляем новые ключевые слова')
+	try:
+		conn = sq.connect('db_bot.db')
+		cursor = conn.cursor()
+		x=int(message.from_user.id)
+		if len(message.text.split()) <=1:
+			bot.send_message(message.from_user.id, 'Беда! Вы не указали ключевое слово. Введите команду в формате /add_key ключевое_слово')
+		else:
+			key = message.text.lower().split()[1]
+			#проверить на что подписан пользователь
+			info1 = cursor.execute("""SELECT word
+										FROM keywords
+										JOIN user_keywords ON word=id_word
+										JOIN users ON id=id_user
+										WHERE users.id=?""", (x,)).fetchall()
+			inf1=[]
+			for i in info1:
+				inf1.append(str(i)[2:-3])
+			# и проверить, какие слова уже в базе есть
+			info2 = cursor.execute("""SELECT word
+										FROM keywords""").fetchall()
+			inf2=[]
+			for i in info2:
+				inf2.append(str(i)[2:-3])
+			if key in inf1 and key in inf2:
+				bot.send_message(message.from_user.id, 'Вы уже подписаны на это ключевое слово')
+			elif key in inf2:
+				cursor.execute("""INSERT INTO user_keywords (id_user, id_word) VALUES (?, ?)""", (x,key))
+				conn.commit()
+				bot.send_message(message.from_user.id, f'Ура! Новое ключевое слово {key} добавлено')
+			else:
+				cursor.execute("""INSERT INTO keywords (word) VALUES (?)""", (key,))
+				conn.commit()
+				cursor.execute("""INSERT INTO user_keywords (id_user, id_word) VALUES (?, ?)""", (x, key))
+				conn.commit()
+				bot.send_message(message.from_user.id, f'Ура! Новое ключевое слово {key} добавлено')
+	except sq.Error:
+		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу добавить ключевое слово')
+	finally:
+		conn.close()
 
 @bot.message_handler(commands=['delete_key'])
 def handle_delete_keyword(message):
-	bot.send_message(message.from_user.id, 'Ну давайте удалим ключевые слов')
+	# bot.send_message(message.from_user.id, 'Ну давайте удалим ключевые слов')
+	try:
+		conn = sq.connect('db_bot.db')
+		cursor = conn.cursor()
+		x=int(message.from_user.id)
+		if len(message.text.split()) <=1:
+			bot.send_message(message.from_user.id, 'Беда! Вы не указали ключевое слово. Введите команду в формате /delete_key ключевое_слово')
+		else:
+			key = message.text.lower().split()[1]
+			# проверить на что подписан пользователь
+			info1 = cursor.execute("""SELECT keywords.word
+										FROM keywords
+										JOIN user_keywords ON keywords.word=user_keywords.id_word
+										JOIN users ON users.id=user_keywords.id_user
+										WHERE users.id=?""", (x,)).fetchall()
+			inf1 = []
+			for i in info1:
+				inf1.append(str(i)[2:-3])
+			if key in inf1:
+				cursor.execute("""DELETE FROM user_keywords WHERE id_word=? AND id_user=?""",(key,x))
+				conn.commit()
+				bot.send_message(message.from_user.id, 'Вы больше не подписаны на это ключевое слово')
+			else:
+				bot.send_message(message.from_user.id, 'Вы не подписаны на это ключевое слово')
+	except sq.Error:
+		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу удалить подписку на ключевое слово')
+	finally:
+		conn.close()
 
 @bot.message_handler(commands=['news'])
 def handle_view_news(message):

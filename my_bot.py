@@ -113,6 +113,42 @@ def handle_view_category(message):
 @bot.message_handler(commands=['add_cat'])
 def handle_add_category(message):
 	bot.send_message(message.from_user.id, 'Хотите добавить новую категорию? Не вопрос')
+	try:
+		conn = sq.connect('db_bot.db')
+		cursor = conn.cursor()
+		x=int(message.from_user.id)
+		if len(message.text.split()) <=1:
+			bot.send_message(message.from_user.id, 'Беда! Вы не указали категорию. Введите команду в формате /add_cat название_категории')
+		else:
+			cat = message.text.lower().split()[1]
+			#проверить на что подписан пользователь
+			info1 = cursor.execute("""SELECT categories.category
+										FROM categories
+										JOIN user_category ON categories.id=user_category.id_category
+										JOIN users ON users.id=user_category.id_user
+										WHERE users.id=?""", (x,)).fetchall()
+			print (info1)
+			# и проверить, какие категории уже в базе есть
+			info2=cursor.execute("""SELECT categories.category
+										FROM categories
+										WHERE categories.category=?""", (cat,)).fetchall()
+			print (info2)
+			if cat in info1 and cat in info2:
+				bot.send_message(message.from_user.id, 'Вы уже подписаны на эту категорию')
+			elif cat in info2:
+				cursor.execute("""INSERT INTO user_category (id_user, id_category) VALUES (?, ?)""", (x,cat))
+				conn.commit()
+				bot.send_message(message.from_user.id, f'Ура! Подписка на категорию {cat} добавлена')
+			else:
+				cursor.execute("""INSERT INTO categories (category) VALUES (?)""", (cat,))
+				conn.commit()
+				cursor.execute("""INSERT INTO user_category (id_user, id_category) VALUES (?, ?)""", (x, cat))
+				conn.commit()
+				bot.send_message(message.from_user.id, f'Ура! Подписка на категорию {cat} добавлена')
+	except sq.Error:
+		bot.send_message(message.from_user.id,'Ошибка подключения к базе, не могу просмотреть добавить категорию')
+	finally:
+		conn.close()
 
 @bot.message_handler(commands=['delete_cat'])
 def handle_delete_category(message):

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import sqlite3 as sq
 from newsapi import NewsApiClient
 import requests
